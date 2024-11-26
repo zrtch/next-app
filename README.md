@@ -24,3 +24,19 @@ template.js
 比如可以创建一个页面模板，允许通过插槽或特定的参数来传递不同的内容。
 
 通常情况下，如果你需要一个全局统一的布局，使用 layout.js；如果你需要在多个地方复用某种页面结构或模板，使用 template.js。
+
+Next.js 基于文件系统的路由解决方案 App Router，介绍了用于定义页面的`page.js`、定义布局的`layout.js`、定义模板的`template.js`、定义加载界面的`loading.js`、定义错误处理的`error.js`、定义 404 页面的`not-found.js`。`template.js`、定义加载界面的`loading.js`、定义错误处理的`error.js`、定义 404 页面的`not-found.js`
+
+```js
+src/
+└── app
+    ├── page.js 
+    ├── layout.js
+    ├── template.js
+    ├── loading.js
+    ├── error.js
+    └── not-found.js
+    ├── about
+    │   └── page.js
+    └── more
+        └── page.js
