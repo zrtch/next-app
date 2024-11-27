@@ -1,6 +1,8 @@
-## 路由
+# 路由
 
-### layout.js 和 template.js 都是用于页面布局的文件，但它们有不同的用途和实现方式。
+## App Router
+
+layout.js 和 template.js 都是用于页面布局的文件，但它们有不同的用途和实现方式。
 
 layout.js
 
@@ -40,3 +42,25 @@ src/
     │   └── page.js
     └── more
         └── page.js
+```
+## 链接和导航
+
+所谓“导航”，指的是使用 JavaScript 进行页面切换，通常会比浏览器默认的重新加载更快，因为在导航的时候，只会更新必要的组件，而不会重新加载整个页面。
+
+在 Next.js 中，有 4 种方式可以实现路由导航：
+
+1. **`<Link>` 组件**：用于客户端路由导航，支持预获取和动态渲染。
+   - 基本用法：`<Link href="/dashboard">Dashboard</Link>`
+   - 动态渲染：`<Link href={`/blog/${post.slug}`}>{post.title}</Link>`
+   - 获取当前路径名：使用 `usePathname()` 获取当前 URL 路径。
+   - 禁用滚动：`<Link href="/dashboard" scroll={false}>`
+
+2. **`useRouter` Hook**：适用于客户端组件，用于更改路由。
+   - 示例：`router.push('/dashboard')`
+
+3. **`redirect` 函数**：适用于服务端组件，用于跳转到指定页面。
+   - 示例：`redirect('/login')`
+
+4. **History API**：使用浏览器原生的 `window.history.pushState` 和 `replaceState` 方法更新历史记录。
+   - 示例：`window.history.pushState(null, '', '?sort=asc')`
+
