@@ -64,3 +64,69 @@ src/
 4. **History API**：使用浏览器原生的 `window.history.pushState` 和 `replaceState` 方法更新历史记录。
    - 示例：`window.history.pushState(null, '', '?sort=asc')`
 
+## 动态路由  路由组  平行路由  拦截路由
+1. 动态路由允许根据 URL 参数动态渲染不同的页面。通过文件和目录的命名方式来实现动态路由。
+
+示例：
+- 文件结构：
+pages/ posts/ [id].js
+
+```javascript
+import { useRouter } from 'next/router';
+
+const Post = () => {
+  const router = useRouter();
+  const { id } = router.query; // 获取动态参数 id
+  return <h1>Post ID: {id}</h1>;
+};
+
+export default Post;
+```
+- 路由示例：
+访问 /posts/1 或 /posts/xyz，页面根据 id 参数动态渲染。
+
+2. 路由组 (Route Groups)
+路由组是 Next.js 13 引入的特性，允许在 app 目录中将页面组织成不同的分组，增强代码拆分和布局管理。
+```js
+app/
+  dashboard/
+    page.js
+  settings/
+    page.js
+```
+路由示例：访问 /dashboard 和 /settings 时分别渲染对应的页面。
+
+3. 平行路由 (Parallel Routes)
+平行路由允许同一页面中根据不同的路由分支并行渲染不同的内容。
+文件结构：
+```
+app/
+  layout.js
+  page.js
+  dashboard/
+    layout.js
+    page.js
+```
+路由示例：
+平行路由使页面在同一访问路径下分区域加载不同内容，例如，主页面和侧边栏内容分开加载。
+
+4. 拦截路由 (Route Interception)
+拦截路由允许你在页面加载前进行路由拦截，通常用于权限校验、用户认证等场景。
+
+示例：
+在 getServerSideProps 或 getInitialProps 中进行路由拦截。
+可通过 middleware 配置拦截器，对用户请求进行权限判断和重定向。
+```js
+export async function getServerSideProps(context) {
+  const user = await getUserFromSession(context.req);
+  if (!user) {
+    return {
+      redirect: {
+        destination: '/login',
+        permanent: false,
+      },
+    };
+  }
+  return { props: { user } };
+}
+```
