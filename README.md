@@ -290,3 +290,55 @@ Next.js 使用 React API 编排渲染，渲染工作会根据路由和 Suspense 
 1.  加载渲染的 HTML 快速展示一个非交互界面（Non-interactive UI）
 2.  RSC Payload 会被用于协调（reconcile）客户端和服务端组件树，并更新 DOM
 3.  JavaScript 代码被用于水合客户端组件，使应用程序具有交互性（Interactive UI）
+
+
+### 服务端渲染策略
+
+Next.js 存在三种不同的服务端渲染策略：
+
+*   静态渲染
+*   动态渲染
+*   Streaming
+
+我们来一一介绍。
+
+1. 静态渲染（Static Rendering）
+
+**这是默认渲染策略**，**路由在构建时渲染，或者在重新验证后后台渲染**，其结果会被缓存并且可以推送到 CDN。适用于未针对用户个性化且数据已知的情况，比如静态博客文章、产品介绍页面等。
+
+2. 动态渲染（Dynamic Rendering）
+
+路由在请求时渲染，适用于针对用户个性化或依赖请求中的信息（如 cookie、URL 参数）的情况。
+
+在渲染过程中，**如果使用了动态函数（Dynamic functions）或者未缓存的数据请求（uncached data request），Next.js 就会切换为动态渲染**。作为开发者，无须选择静态还是动态渲染，Next.js 会自动根据使用的功能和 API 为每个路由选择最佳的渲染策略
+
+#### 使用动态函数（Dynamic functions）
+
+**动态函数指的是获取只有在请求时才能得到信息（如 cookie、请求头、URL 参数）的函数**。
+
+在 Next.js 中这些动态函数是：
+
+*   [cookies()](https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-7) 和 [headers()](https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-20) ：获取 cookie 和 header
+*   `searchParams`：页面查询参数
+
+使用这些函数的任意一个，都会导致路由转为动态渲染。
+
+
+#### 使用未缓存的数据请求（uncached data request）
+
+在 Next.js 中，fetch 请求的结果默认会被缓存，但你可以设置退出缓存，一旦你设置了退出缓存，就意味着使用了未缓存的数据请求（uncached data request），会导致路由进入动态渲染，如：
+
+*   `fetch` 请求添加了 `cache: 'no-store'`选项
+*   `fetch` 请求添加了 `revalidate: 0`选项
+*   `fetch` 请求在路由处理程序中并使用了 `POST` 方法
+*   在`headers` 或 `cookies` 方法之后使用 `fetch`请求
+*   配置了路由段选项 `const dynamic = 'force-dynamic'`
+*   配置了路由段选项`fetchCache` ，默认会跳过缓存
+*   `fetch` 请求使用了 `Authorization`或者 `Cookie`请求头，并且在组件树中其上方还有一个未缓存的请求
+
+####  局部渲染（Partial rendering）
+
+局部渲染指的是仅在客户端重新渲染导航时更改的路由段，共享段的内容的继续保留。举个例子，当在两个相邻的路由间导航的时候, `/dashboard/settings` 和 `/dashboard/analytics`，`settings` 和 `analytics` 页面会重新渲染，共享的 `dashboard` 布局会保留。
+
+
+
