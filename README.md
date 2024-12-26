@@ -210,3 +210,83 @@ export async function getStaticProps() {
   }
 }
 ```
+
+### 服务端渲染
+
+1.  数据获取：通常服务端环境（网络、性能等）更好，离数据源更近，在服务端获取数据会更快。通过减少数据加载时间以及客户端发出的请求数量来提高性能
+2.  安全：在服务端保留敏感数据和逻辑，不用担心暴露给客户端
+3.  缓存：服务端渲染的结果可以在后续的请求中复用，提高性能
+4.  bundle 大小：服务端组件的代码不会打包到 bundle 中，减少了 bundle 包的大小
+5.  初始页面加载和 FCP：服务端渲染生成 HTML，快速展示 UI
+6.  Streaming：服务端组件可以将渲染工作拆分为 chunks，并在准备就绪时将它们流式传输到客户端。用户可以更早看到页面的部分内容，而不必等待整个页面渲染完毕
+
+因为服务端组件的诸多好处，**在实际项目开发的时候，能使用服务端组件就尽可能使用服务端组件**。
+
+**限制**：虽然使用服务端组件有很多好处，但使用服务端组件也有一些限制，比如不能使用 useState 管理状态，不能使用浏览器的 API 等等。如果我们使用了 Next.js 会报错。所以在使用服务端组件的时候，需要注意这些限制，以免出错。
+
+### 客户端渲染
+
+1.  交互性：客户端组件可以使用 state、effects 和事件监听器，意味着用户可以与之交互
+2.  浏览器 API：客户端组件可以使用浏览器 API 如地理位置、localStorage 等
+
+![alt text](image.png)
+
+#### 交替使用服务端组件和客户端组件
+
+实际开发的时候，不可能纯用服务端组件或者客户端组件，当交替使用的时候，一定要注意一点，那就是：
+
+**服务端组件可以直接导入客户端组件，但客户端组件并不能导入服务端组件**
+
+组件默认是服务端组件，但当组件导入到客户端组件中会被认为是客户端组件。客户端组件不能导入服务端组件，其实是在告诉你，如果你在服务端组件中使用了诸如 Node API 等，该组件可千万不要导入到客户端组件中。
+
+但你可以将服务端组件以 props 的形式传给客户端组件：
+
+```js
+'use client'
+ 
+import { useState } from 'react'
+ 
+export default function ClientComponent({ children }) {
+  const [count, setCount] = useState(0)
+ 
+  return (
+    <>
+      <button onClick={() => setCount(count + 1)}>{count}</button>
+      {children}
+    </>
+  )
+}
+```
+```js
+import ClientComponent from './client-component'
+import ServerComponent from './server-component'
+ 
+export default function Page() {
+  return (
+    <ClientComponent>
+      <ServerComponent />
+    </ClientComponent>
+  )
+}
+```
+使用这种方式，`<ClientComponent>` 和 `<ServerComponent>` 代码解耦且独立渲染。
+
+### 组件渲染原理
+在服务端：
+
+Next.js 使用 React API 编排渲染，渲染工作会根据路由和 Suspense 拆分成多个块（chunks），每个块分两步进行渲染：
+
+1.  React 将服务端组件渲染成一个特殊的数据格式称为 **React Server Component Payload (RSC Payload)**
+2.  Next.js 使用 RSC Payload 和客户端组件代码在服务端渲染 HTML
+
+> RSC payload 中包含如下这些信息：
+>
+> 1.  服务端组件的渲染结果
+> 2.  客户端组件占位符和引用文件
+> 3.  从服务端组件传给客户端组件的数据
+
+在客户端：
+
+1.  加载渲染的 HTML 快速展示一个非交互界面（Non-interactive UI）
+2.  RSC Payload 会被用于协调（reconcile）客户端和服务端组件树，并更新 DOM
+3.  JavaScript 代码被用于水合客户端组件，使应用程序具有交互性（Interactive UI）
