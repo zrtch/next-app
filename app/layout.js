@@ -23,6 +23,7 @@ export default function RootLayout({ children, team, modal }) {
           <Link href="/">Home</Link>
           <Link href="/page-views">Page Views</Link>
           <Link href="/visitors">Visitors</Link>
+          <Link href="/dashboard">Dashboard</Link>
         </nav>
         <div className="flex gap-6">
           {team}

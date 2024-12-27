@@ -1,13 +1,12 @@
-import { use } from "react";
-
 async function getData() {
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-  return {
-    message: "Hello, Dashboard!",
-  };
+  const res = await fetch('https://api.thecatapi.com/v1/images/search')
+  if (!res.ok) {
+    throw new Error('Failed to fetch data')
+  }
+  return res.json()
 }
 
-export default function Page(props) {
-  const { message } = use(getData());
-  return <h1>{message}</h1>;
+export default async function Page() {
+  const data = await getData()
+  return <img src={data[0].url} width="300" />
 }

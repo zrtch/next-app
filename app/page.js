@@ -6,17 +6,33 @@
  * @FilePath: \demo\next-app\app\page.js
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
-import Link from "next/link";
-import { photos } from "./data";
+// import Link from "next/link";
+// import { photos } from "./data";
 
-export default function Home() {
-  return (
-    <main className="flex flex-row flex-wrap">
-      {photos.map(({ id, src }) => (
-        <Link key={id} href={`/photo/${id}`}>
-          <img width="200" src={src} className="m-1" />
-        </Link>
-      ))}
-    </main>
-  );
+// export default function Home() {
+//   return (
+//     <main className="flex flex-row flex-wrap">
+//       {photos.map(({ id, src }) => (
+//         <Link key={id} href={`/photo/${id}`}>
+//           <img width="200" src={src} className="m-1" />
+//         </Link>
+//       ))}
+//     </main>
+//   );
+// }
+
+
+async function getData() {
+  const res = await fetch('https://api.thecatapi.com/v1/images/search', { next: { tags: ['collection'] } })
+  if (!res.ok) {
+    throw new Error('Failed to fetch data')
+  }
+
+  return res.json()
+}
+
+export default async function Page() {
+  const data = await getData()
+
+  return <img src={data[0].url} width="300" />
 }
