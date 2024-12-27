@@ -341,4 +341,136 @@ Next.js 存在三种不同的服务端渲染策略：
 局部渲染指的是仅在客户端重新渲染导航时更改的路由段，共享段的内容的继续保留。举个例子，当在两个相邻的路由间导航的时候, `/dashboard/settings` 和 `/dashboard/analytics`，`settings` 和 `analytics` 页面会重新渲染，共享的 `dashboard` 布局会保留。
 
 
+## 数据获取
 
+在 Next.js 中获取数据的推荐方式是使用原生的 `fetch` 方法，因为 Next.js 扩展了 `fetch` 方法，增加了缓存和重新验证机制。
+
+### 服务端使用 `fetch`
+
+
+Next.js 扩展了原生的 [fetch Web API](https://developer.mozilla.org/zh-CN/docs/Web/API/Fetch_API)，可以为服务端的每个请求配置缓存和重新验证行为。
+
+```javascript
+// app/page.js
+async function getData() {
+  const res = await fetch('https://jsonplaceholder.typicode.com/todos') 
+  if (!res.ok) {
+    throw new Error('Failed to fetch data')
+  }
+  return res.json()
+}
+
+export default async function Page() {
+  const data = await getData()
+  return <main>{JSON.stringify(data)}</main>
+}
+```
+
+### 默认缓存
+
+默认情况下，Next.js 会自动缓存服务端 `fetch` 请求的返回值。
+
+```javascript
+// fetch 的 cache 选项用于控制该请求的缓存行为
+fetch('https://...&#39;,  { cache: 'force-cache' })
+```
+
+### 重新验证
+
+Next.js 提供了两种方式重新验证：基于时间的重新验证和按需重新验证。
+
+#### 基于时间的重新验证
+
+```javascript
+fetch('https://...&#39;,  { next: { revalidate: 3600 } })
+```
+
+#### 按需重新验证
+
+- revalidatePath
+
+```javascript
+import { revalidatePath } from 'next/cache'
+ 
+export async function GET(request) {
+  const path = request.nextUrl.searchParams.get('path')
+ 
+  if (path) {
+    revalidatePath(path)
+    return Response.json({ revalidated: true, now: Date.now() })
+  }
+ 
+  return Response.json({
+    revalidated: false,
+    now: Date.now(),
+    message: 'Missing path to revalidate',
+  })
+}
+```
+
+- revalidateTag
+
+```javascript
+// app/page.js
+export default async function Page() {
+  const res = await fetch('https://...&#39;,  { next: { tags: ['collection'] } })
+  const data = await res.json()
+  // ...
+}
+```
+
+### 服务端使用三方请求库
+
+如果使用不支持 `fetch` 的三方库，可以使用 React 的 `cache` 函数和路由段配置项来实现请求的缓存和重新验证。
+
+```javascript
+// app/utils.js
+import { cache } from 'react'
+ 
+export const getItem = cache(async (id) => {
+  const item = await db.item.findUnique({ id })
+  return item
+})
+```
+
+### 客户端使用路由处理程序
+
+在客户端组件中获取数据，可以在客户端调用路由处理程序。路由处理程序会在服务端被执行，然后将数据返回给客户端。
+
+### 客户端使用三方请求库
+
+在客户端使用三方库如 [SWR](https://swr.vercel.app/) 或 [React Query](https://tanstack.com/query/latest) 来获取数据。
+
+### 建议与最佳实践
+
+#### 5.1. 尽可能在服务端获取数据
+
+尽可能在服务端获取数据，这样做有很多好处，比如：
+
+1.  可以直接访问后端资源（如数据库）
+2.  防止敏感信息泄漏
+3.  减少客户端和服务端之间的来回通信，加快响应时间
+
+#### 5.2. 在需要的地方就地获取数据
+
+如果组件树中的多个组件使用相同的数据，无须先全局获取，再通过 props 传递，你可以直接在需要的地方使用 `fetch` 或者 React `cache` 获取数据，不用担心多次请求造成的性能问题，因为 `fetch` 请求会自动被记忆化。这也同样适用于布局，毕竟本来父子布局之间也不能传递数据。
+
+#### 5.3. 适当的时候使用 Streaming
+
+Streaming 和 `Suspense`都是 React 的功能，允许你增量传输内容以及渐进式渲染 UI 单元。页面可以直接渲染部分内容，剩余获取数据的部分会展示加载态，这也意味着用户不需要等到页面完全加载完才能与其交互。
+
+#### 5.4. 串行获取数据
+
+在 React 组件内获取数据时，有两种数据获取模式，并行和串行。
+
+#### 5.5. 并行数据请求
+
+要实现并行请求数据，你可以在使用数据的组件外定义请求，然后在组件内部调用。
+
+#### 5.6. 预加载数据
+
+防止出现串行请求的另外一种方式是使用预加载。
+
+#### 5.7. 使用 React `cache` `server-only` 和预加载模式
+
+你可以将 `cache` 函数，`preload` 模式和 [server-only](https://juejin.cn/book/7307859898316881957/section/7309076661532622885#heading-15) 包一起使用，创建一个可在整个应用使用的数据请求工具函数。
