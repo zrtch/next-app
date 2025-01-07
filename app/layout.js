@@ -24,6 +24,8 @@ export default function RootLayout({ children, team, modal }) {
           <Link href="/page-views">Page Views</Link>
           <Link href="/visitors">Visitors</Link>
           <Link href="/dashboard">Dashboard</Link>
+          <Link href="/a">Link to A</Link>
+          <Link href="/b">Link to B</Link>
         </nav>
         <div className="flex gap-6">
           {team}
