@@ -25,6 +25,8 @@ export default function RootLayout({ children, team, modal }) {
           <Link href="/visitors">Visitors</Link>
           <Link href="/dashboard">Dashboard</Link>
           <Link href="/todo">Todo</Link>
+          <Link href="/form3">Form</Link>
+          <Link href="/form4">Form4</Link>
           <Link href="/a">Link to A</Link>
           <Link href="/b">Link to B</Link>
         </nav>

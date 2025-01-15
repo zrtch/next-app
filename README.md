@@ -619,3 +619,238 @@ export default function Page() {
 也就是说，如果你要实现一个功能，按照传统前后端分离的架构，需要自己先写一个接口，用于前后端交互，那就都可以尝试使用 Server Actions，除非你就是需要写接口方便外部调用。
 
 而在具体使用上，虽然 Server Actions 常与 <form> 一起使用，但其实还可以在事件处理程序、useEffect、三方库、其他表单元素（如 <button>）中调用。
+
+Server Actions 有哪些注意要点。简单来说，要注意：
+
+### 1. 获取数据
+
+如果使用 form action 这种最基本的形式，Server Action 函数第一个参数就是 formData：
+
+```javascript
+export default function Page() {
+  async function createInvoice(formData) {
+    'use server'
+ 
+    const rawFormData = {
+      customerId: formData.get('customerId')
+    }
+ 
+    // mutate data
+    // revalidate cache
+  }
+ 
+  return <form action={createInvoice}>...</form>
+}
+```
+
+如果使用 form action + useFormState 这种形式，Server Actions 函数第一个参数是 prevState，第二个参数是 formData：
+
+```javascript
+'use client'
+
+import { useFormState } from 'react-dom'
+
+export default function Home() {
+
+  async function createTodo(prevState, formData) {
+    return prevState.concat(formData.get('todo'));
+  }
+
+  const [state, formAction] = useFormState(createTodo, [])
+
+  return (
+    <form action={formAction}>
+      <input type="text" name="todo" />
+      <button type="submit">Submit</button>
+      <p>{state.join(',')}</p>
+    </form>
+  ) 
+}
+```
+
+如果是直接调用，那看调用的时候是怎么传入的，比如上篇举的事件调用的例子：
+
+```javascript
+'use client'
+
+import { createToDoDirectly } from './actions';
+
+export default function Button({children}) {
+  return <button onClick={async () => {
+    const data = await createToDoDirectly('运动')
+    alert(JSON.stringify(data))
+  }}>{children}</button>
+}
+```
+
+```javascript
+'use server'
+
+export async function createToDoDirectly(value) {
+  const form = new FormData()
+  form.append("todo", value);
+  return createToDo(form)
+}
+```
+
+### 2. 表单验证
+
+Next.js 推荐基本的表单验证使用 HTML 元素自带的验证如 `required`、`type="email"`等。
+
+对于更高阶的服务端数据验证，可以使用 [zod](https://zod.dev/) 这样的 schema 验证库来验证表单数据的结构：
+
+```javascript
+'use server'
+ 
+import { z } from 'zod'
+ 
+const schema = z.object({
+  email: z.string({
+    invalid_type_error: 'Invalid Email',
+  }),
+})
+ 
+export default async function createsUser(formData) {
+  const validatedFields = schema.safeParse({
+    email: formData.get('email'),
+  })
+ 
+  // Return early if the form data is invalid
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+    }
+  }
+ 
+  // Mutate data
+}
+```
+
+### 3. 重新验证数据
+
+Server Action 修改数据后，一定要注意重新验证数据，否则数据不会及时更新。
+
+使用 revalidatePath：
+
+```javascript
+'use server'
+ 
+import { revalidatePath } from 'next/cache'
+ 
+export async function createPost() {
+  try {
+    // ...
+  } catch (error) {
+    // ...
+  }
+ 
+  revalidatePath('/posts')
+}
+```
+
+使用 revalidateTag：
+
+```javascript
+'use server'
+ 
+import { revalidateTag } from 'next/cache'
+ 
+export async function createPost() {
+  try {
+    // ...
+  } catch (error) {
+    // ...
+  }
+ 
+  revalidateTag('posts')
+}
+```
+
+### 4. 错误处理
+
+一种是返回错误信息。举个例子，当一个条目创建失败，返回错误信息：
+
+```javascript
+'use server'
+// app/actions.js
+export async function createTodo(prevState, formData) {
+  try {
+    await createItem(formData.get('todo'))
+    return revalidatePath('/')
+  } catch (e) {
+    return { message: 'Failed to create' }
+  }
+}
+```
+
+在客户端组件中，读取这个值并显示错误信息：
+
+```javascript
+'use client'
+// app/add-form.jsx
+import { useFormState, useFormStatus } from 'react-dom'
+import { createTodo } from '@/app/actions'
+ 
+const initialState = {
+  message: null,
+}
+ 
+function SubmitButton() {
+  const { pending } = useFormStatus()
+ 
+  return (
+    <button type="submit" aria-disabled={pending}>
+      Add
+    </button>
+  )
+}
+ 
+export function AddForm() {
+  const [state, formAction] = useFormState(createTodo, initialState)
+ 
+  return (
+    <form action={formAction}>
+      <label htmlFor="todo">Enter Task</label>
+      <input type="text" id="todo" name="todo" required />
+      <SubmitButton />
+      <p aria-live="polite" className="sr-only">
+        {state?.message}
+      </p>
+    </form>
+  )
+}
+```
+
+一种是抛出错误，会由最近的 error.js 捕获：
+
+```javascript
+'use client'
+// error.js
+export default function Error() {
+  return (
+    <h2>error</h2>
+  )
+}
+```
+
+```javascript
+// page.js
+import { useFormState } from 'react-dom'
+
+function AddForm() {
+  async function serverActionWithError() {
+    'use server';   
+    throw new Error(`This is error is in the Server Action`);
+  }
+
+  return (
+    <form action={serverActionWithError}>
+      <button type="submit">Submit</button>
+    </form>
+  ) 
+}
+
+export default AddForm
+```
+
+这样当 Server Action 发生错误的时候，就会展示错误 UI。
