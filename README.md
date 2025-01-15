@@ -586,3 +586,36 @@ Next.js 有一个存放在内存中的客户端缓存，它会在用户会话期
 
 1.  路由缓存发生在用户访问期间，将 RSC Payload 暂时存储在浏览器，导航期间都会持续存在，页面刷新的时候会被清除。而完整路由缓存则会持久的将 RSC Payload 和 HTML 缓存在服务器上
 2.  完整路由缓存仅缓存静态渲染的路由，路由缓存可以应用于静态和动态渲染的路由
+
+## 数据获取
+
+**Server Actions 是指在服务端执行的异步函数，它们可以在服务端和客户端组件中使用，以处理 Next.js 应用中的数据提交和更改。**
+
+定义一个 Server Action 需要使用 React 的 ["use server"](https://react.dev/reference/react/use-server) 指令。按指令的定义位置分为两种用法：
+
+1.  将 "use server" 放到一个 async 函数的顶部表示该函数为 Server Action（函数级别）
+2.  将 "use server" 放到一个单独文件的顶部表示该文件导出的所有函数都是 Server Actions（模块级别）
+
+**Server Actions 可以在服务端组件使用，也可以在客户端组件使用。**
+当在服务端组件中使用的时候，两种级别都可以使用：
+```js
+// app/page.jsx
+export default function Page() {
+  // Server Action
+  async function create() {
+    'use server'
+ 
+    // ...
+  }
+ 
+  return (
+    // ...
+  )
+}
+```
+
+在 Pages Router 下，如果要进行前后端交互，需要先定义一个接口，然后前端调用接口完成前后端交互。而在 App Router 下，这种操作都可以简化为 Server Actions。
+
+也就是说，如果你要实现一个功能，按照传统前后端分离的架构，需要自己先写一个接口，用于前后端交互，那就都可以尝试使用 Server Actions，除非你就是需要写接口方便外部调用。
+
+而在具体使用上，虽然 Server Actions 常与 <form> 一起使用，但其实还可以在事件处理程序、useEffect、三方库、其他表单元素（如 <button>）中调用。
