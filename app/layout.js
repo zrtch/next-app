@@ -16,7 +16,7 @@ export default function RootLayout({ children, team, modal }) {
   return (
     <html>
       <body className="p-6">
-        <div className="p-10 mb-6 bg-sky-600 text-white rounded-xl">
+        <div className="p-10 mb-6 text-white rounded-xl bg-blue-400">
           Parallel Routes Examples
         </div>
         <nav className="flex items-center justify-center gap-10 text-blue-600 mb-6">
