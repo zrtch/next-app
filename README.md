@@ -620,7 +620,7 @@ export default function Page() {
 
 而在具体使用上，虽然 Server Actions 常与 <form> 一起使用，但其实还可以在事件处理程序、useEffect、三方库、其他表单元素（如 <button>）中调用。
 
-Server Actions 有哪些注意要点。简单来说，要注意：
+Server Actions 有哪些注意要点。
 
 ### 1. 获取数据
 
