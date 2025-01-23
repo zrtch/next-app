@@ -854,3 +854,62 @@ export default AddForm
 ```
 
 这样当 Server Action 发生错误的时候，就会展示错误 UI。
+
+## 环境变量
+
+在 Next.js 中添加环境变量会更加方便，因为 Next.js 内置了对环境变量的支持，使用环境变量有两种方式：
+
+1.  通过 `.env.local` 加载环境变量
+
+Next.js 支持从 `.env.local`中加载环境变量到 `process.env`。现在我们在项目根目录下建立一个 `.env.local`文件（注意是根目录，不是 `/src`目录）
+
+```
+// app/api/route.js
+export async function GET() {
+  const db = await myDB.connect({
+    host: process.env.DB_HOST,
+    username: process.env.DB_USER,
+    password: process.env.DB_PASS,
+  })
+  // ...
+}
+```
+
+2.  通过 `NEXT_PUBLIC_`前缀在浏览器中获取环境变量
+
+为了让浏览器也可以获取环境变量中的值，Next.js 可以在构建的时候，将值内联到客户端的 js bundle 中，替换掉所有硬编码使用 `process.env.[variable]`的地方。不过为了告诉 Next.js 哪些值是可以让浏览器访问的，你需要在变量前添加 `NEXT_PUBLIC_`前缀，这样浏览器就可以通过 `window.NEXT_PUBLIC_VARIABLE`来访问了。
+
+``` js
+'use client';
+// app/page.js
+export default function Page() {
+  return <h1 onClick={() => {
+    console.log(process.env.NEXT_PUBLIC_ANALYTICS_ID)
+  }}>Hello World!</h1>
+}
+```
+
+#### 默认变量环境
+
+通常一个 `.env.local`文件就够用了，但有的时候，你也许会希望在 `development`（`next dev`）或 `production`（`next start`）环境中添加一些默认值。
+
+Next.js 支持在 `.env`（所有环境）、`.env.development`（开发环境）、`.env.production`（生产环境）中设置默认的值。
+
+`.env.local`会覆盖这些默认值。
+
+注意：`.env`、`.env.development`、`.env.production` 用来设置默认的值，所有这些文件可以放到仓库中，但 `.env*.local`应该添加到 `.gitignore`，因为可能涉及到一些机密的信息。
+
+此外，如果环境变量 NODE\_ENV 未设置，当执行 `next dev`的时候，Next.js 会自动给 `NODE_DEV`赋值 `development`，其他命令则会赋值 `production`。也就是说，当执行 `next dev`或者其他命令的时候，获取`process.env.NODE_ENV`是有值的，这是 Next.js 自动赋值的，为了帮助开发者区分开发环境。
+
+
+#### 环境变量加载顺序
+
+环境变量的查找也是有顺序的，一旦找到，就会终止查找，不会再往下查找，这个顺序是：
+
+1.  `process.env`
+2.  `.env.$(NODE_ENV).local`
+3.  `.env.local` (当 `NODE_ENV` 是 `test` 的时候不会查找)
+4.  `.env.$(NODE_ENV)`
+5.  `.env`
+
+举个例子，如果你在 `.env.development.local` 和 `.env`中设置了 `NODE_ENV` 为 `development`，按照这个顺序，最终会使用 `.env.development.local`中的值。
