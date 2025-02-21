@@ -1082,3 +1082,423 @@ export const revalidate = 3600
 - 静态网站：使用 dynamic: 'error' 和 fetchCache: 'only-cache'，确保博客或产品页面完全静态。
 - 性能优化：设置 revalidate: 3600 定期刷新缓存，平衡性能和数据新鲜度。
 - 边缘计算：使用 runtime: 'edge' 和 preferredRegion: ['iad1', 'sfo1']，优化全球用户的访问速度。
+
+## 组件篇
+
+考虑到 LCP 并不算是一个常为大家熟知的概念，所以我们单独介绍下 LCP。
+
+对于 Web 开发者而言，衡量网页主要内容的加载速度一直是一个挑战。
+
+传统我们会使用 load、DOMContentLoaded 等方法，但它们并不表示用户在屏幕上看到的内容的时间。
+
+而像首次内容渲染（FCP），如果页面有 loading 效果，那获取的时间也是不准确的。
+
+当然也有首次有效绘制（FMP）等指标，但是这些指标非常复杂，往往是错误的。所以也不能用来确定主要内容的加载时间。
+
+根据 W3C Web 性能工作组中的讨论和 Google 的研究，要衡量网页主要内容的加载时间，更为准确的方法是查看最大元素的呈现时间。这就是 LCP。
+
+Largest Contentful Paint (LCP) 指标会报告视口内可见的最大图片或文本块的呈现时间（相对于网页首次开始加载的时间）。
+
+为了提供良好的用户体验，网站应尽力将 Largest Contentful Paint 设置为 **2.5 秒**或更短。
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/cdad5f872000436386d02af3b2b22ab6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=621&s=344333&e=png&b=faf4f4)
+
+那么问题来了，页面往往是分阶段加载的，网页中最大元素可能是在不断变化的，LCP 是怎么计算出来的呢？
+
+首先，浏览器会将 LCP 的元素限定在一些特定的元素类型内，比如`<img>` 元素、包含文本节点或其他内嵌级别文本元素的子项的块级元素、为自动播放 `<video>` 元素而绘制的第一帧、动画图片格式（例如 GIF 动画）的第一帧等等（这是为了简化这个问题，如果什么元素都计算一遍大小，就太复杂了而且没必要）。
+
+然后浏览器在绘制完第一帧后，就会立即分派 largest-contentful-paint 类型的 PerformanceEntry，用于标识最大的内容元素。在渲染后续帧后，只要最大内容元素发生变化，该 API 就会再分派另一个 PerformanceEntry。简单的来说，每一帧绘制的时候，浏览器都会标示出最大内容元素。
+
+当用户与页面发生交互（通过点按、滚动或按键），浏览器就会停止报告新条目。（因为用户交互通常会改变向用户显示的内容，就比如滚动操作）。一般来说，发出的最后一个条目的 startTime 值是 LCP 值。
+
+### `<Image>`
+
+讲解 LCP，只是为了帮助大家认识到图片优化的重要性（毕竟最大内容元素往往是图片）。回到 `<Image>` 组件上，Next.js 基于原生的 HTML `<img>` 元素，实现了这些优化功能：
+
+1. 尺寸优化：自动为每个设备提供正确尺寸的图片，也会使用现代图片格式如 WebP 和 AVIF。
+2. 视觉稳定性：防止图片加载时发生布局偏移（Layout Shift）
+3. 更快的页面加载：图片只有在进入视口的时候才会加载，使用懒加载功能，并可选使用模糊占位符
+4. 灵活配置：按需进行图片调整，远程服务器上的图片也可以
+
+这些功能我们会在讲解组件 API 的时候一一涉及。
+
+```js
+// app/page.js
+import Image from 'next/image'
+
+export default function Page() {
+  return (
+    <Image
+      src="/profile.png"
+      width={500}
+      height={500}
+      alt="Picture of the author"
+    />
+  )
+}
+```
+
+支持的 props:
+
+| **Prop**                                                                                          | **示例**                             | **类型**                 | **是否必须** |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------ | ------------ |
+| [src](https://nextjs.org/docs/app/api-reference/components/image#src)                             | `src="/profile.png"`                 | String                   | 是           |
+| [width](https://nextjs.org/docs/app/api-reference/components/image#width)                         | `width={500}`                        | Integer (px)             | 是           |
+| [height](https://nextjs.org/docs/app/api-reference/components/image#height)                       | `height={500}`                       | Integer (px)             | 是           |
+| [alt](https://nextjs.org/docs/app/api-reference/components/image#alt)                             | `alt="Picture of the author"`        | String                   | 是           |
+| [loader](https://nextjs.org/docs/app/api-reference/components/image#loader)                       | `loader={imageLoader}`               | 解析图片地址的自定义函数 | -            |
+| [fill](https://nextjs.org/docs/app/api-reference/components/image#fill)                           | `fill={true}`                        | 是否将图片填充父元素     | -            |
+| [sizes](https://nextjs.org/docs/app/api-reference/components/image#sizes)                         | `sizes="(max-width: 768px) 100vw"`   | 设置响应式图像           | -            |
+| [quality](https://nextjs.org/docs/app/api-reference/components/image#quality)                     | `quality={80}`                       | 优化图片的质量           | -            |
+| [priority](https://nextjs.org/docs/app/api-reference/components/image#priority)                   | `priority={true}`                    | 图片加载优先级           | -            |
+| [placeholder](https://nextjs.org/docs/app/api-reference/components/image#placeholder)             | `placeholder="blur"`                 | 加载图片时的占位符       | -            |
+| [style](https://nextjs.org/docs/app/api-reference/components/image#style)                         | `style={{objectFit: "contain"}}`     | 图片的样式               | -            |
+| [onLoadingComplete](https://nextjs.org/docs/app/api-reference/components/image#onloadingcomplete) | `onLoadingComplete={img => done())}` | 图片加载完毕的时候执行   | -            |
+| [onLoad](https://nextjs.org/docs/app/api-reference/components/image#onload)                       | `onLoad={event => done())}`          | 图片加载完的时候执行     | -            |
+| [onError](https://nextjs.org/docs/app/api-reference/components/image#onerror)                     | `onError(event => fail()}`           | 图片加载失败时执行       | -            |
+| [loading](https://nextjs.org/docs/app/api-reference/components/image#loading)                     | `loading="lazy"`                     | 设置图片的加载行为       | -            |
+| [blurDataURL](https://nextjs.org/docs/app/api-reference/components/image#blurdataurl)             | `blurDataURL="data:image/jpeg..."`   | 取消优化                 | -            |
+
+注意使用远程地址的时候，Next.js 要求在 `next.config.js`文件中定义支持的远程图片地址，这是为了防止一些恶意使用。配置方法如下：
+
+```js
+// next.config.js
+module.exports = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 's3.amazonaws.com',
+        port: '',
+        pathname: '/my-bucket/**',
+      },
+    ],
+  },
+}
+```
+
+#### fill
+
+`fill`表示是否将图片填充父元素。默认值为 `false`。当图片的 `width` 和 `height` 未知的时候很有用。
+
+```js
+// 效果如下，图片在保持其宽高比的同时填充元素的整个内容框。如果对象的宽高比与内容框不相匹配，该对象将被剪裁以适应内容框：
+import Image from 'next/image'
+import profilePic from './image.png'
+
+export default function Page() {
+  return (
+    <Image
+      src={profilePic}
+      alt="Picture of the author"
+      fill={true}
+      style={{ objectFit: 'cover' }}
+    />
+  )
+}
+```
+
+#### priority
+
+表示图片加载优先级，布尔类型，默认值为 false。当值为 true 时表示高优先级并预加载。使用 `priority` 的图片会自动禁用懒加载。
+
+```javascript
+priority={false} // {false} | {true}
+```
+
+使用该属性有两个建议：
+
+1. 在首屏可见的图片上使用
+2. 在 LCP 图片元素上使用，考虑到不同的视口宽度可能有不同的 LCP 图片，可以设置多个
+
+运行 `next dev` 的时候，如果 LCP 元素是一个图片，但没有设置 priority 属性，控制台里会有警告：
+
+```js
+// app/page.js
+import Image from 'next/image'
+import profilePic from '../public/me.png'
+
+export default function Page() {
+  return <Image src={profilePic} alt="Picture of the author" priority />
+}
+```
+
+你也可以在 `next.config.js` 中配置图片组件。
+
+### 1. remotePatterns
+
+为保护应用远离恶意用户，当使用外部图片的时候需要配置 `remotePatterns`：
+
+```js
+// next.config.js
+module.exports = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'example.com',
+        port: '',
+        pathname: '/account123/**',
+      },
+    ],
+  },
+}
+```
+
+这个示例的意思是，`next/image` 的 `src` 属性的值必须是以 `https://example.com/account123/` 为开头。其他的协议、主机名、端口或者不匹配的路径都会返回 400 错误。
+
+### 2. domains
+
+自 Next.js 14 起因为使用了更为严格的 `remotePatterns` 而废弃。仅当所有的内容都来自你所能控制的域的时候你再使用。
+
+与 `remotePatterns` 类似，`domains` 配置项提供了一个用于外部图片的 hostname 列表：
+
+```javascript
+// next.config.js
+module.exports = {
+  images: {
+    domains: ['assets.acme.com'],
+  },
+}
+```
+
+但是注意 `domains` 不支持通配符，并且无法限制协议、端口或者路径名。所以更建议使用 `remotePatterns`。
+
+### 3. loaderFile
+
+如果你不希望使用 Next.js 内置的图片优化 API，那你可以自己配置，使用 `next.config.js` 的 `loaderFile` 配置项：
+
+```javascript
+// next.config.js
+module.exports = {
+  images: {
+    loader: 'custom',
+    loaderFile: './my/image/loader.js',
+  },
+}
+```
+
+`loaderFile` 必须指向相对于 Next.js 应用根目录的文件。该文件必须导出一个默认函数，该函数返回一个字符串。举个例子：
+
+```javascript
+'use client'
+
+export default function myImageLoader({ src, width, quality }) {
+  return `https://example.com/${src}?w=${width}&q=${quality || 75}`
+}
+```
+
+这会应用到所有的 `next/image` 的实例，如果你要修改个别图片，使用 `loader` prop。
+
+### 4. deviceSizes
+
+如果你知道用户的设备宽度，那你可以使用 `next.config.js`的 `deviceSizes`来声明一系列的设备宽度断点。当 `next/image` 组件使用 `sizes` prop 的时候，这些宽度会被用来推断正确加载的图片。
+
+如果没有配置，默认值是：
+
+```javascript
+// next.config.js
+module.exports = {
+  images: {
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+  },
+}
+```
+
+### 5. imageSizes
+
+你可以使用 `next.config.js` 的 `imageSize` 属性声明一系列的图片宽度。
+
+如果没有配置，默认值是：
+
+```javascript
+// next.config.js
+module.exports = {
+  images: {
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+  },
+}
+```
+
+`imageSize` 和 `deviceSizes` 会影响图片生成最终的 `srcset` 尺寸：
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/186de6c29889461b9d4e2a0b6697481b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1178&h=436&s=253485&e=png&b=282828)
+
+```js
+import Image from 'next/image'
+import profilePic from './image.png'
+
+export default function Page() {
+  return (
+    <Image
+      src={profilePic}
+      sizes="(max-width: 600px) 160px,
+      320px"
+      alt="Picture of the author"
+    />
+  )
+}
+```
+
+当你使用了 `sizes` prop 的时候，说明图片的宽度是小于全屏宽度的。`imagesSizes` 的中的所有值应该都小于 `deviceSizes` 中的最小值。
+
+### 6. formats
+
+Next.js 默认的图片优化 API 会自动通过请求中的 Accept 请求头检测浏览器支持的图片格式。
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a1a458a9d4fb4ae6a2bb54db2ecd4766~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=980&h=146&s=29237&e=png&b=292929)
+
+如果 `Accept` 匹配多个配置的格式，数组中的第一个会被首先使用。因此，数组的顺序很重要，如果没有匹配到，或者源图片为动图，图片优化 API 会自动回退到原本的图片格式。
+
+如果没有配置，默认值是：
+
+```javascript
+// next.config.js
+module.exports = {
+  images: {
+    formats: ['image/webp'],
+  },
+}
+```
+
+你可以使用下面的配置开启 AVIF 格式支持：
+
+```javascript
+// next.config.js
+module.exports = {
+  images: {
+    formats: ['image/avif', 'image/webp'],
+  },
+}
+```
+
+## 响应式图片
+
+图片默认生成的 `srcset` 包括 `1x`、`2x` 图片，这是为了支持不同的设备像素比。不过有的时候，你希望渲染响应式图片，自动适配视口，这个时候，你就需要设置 `sizes` 以及 `style`（或者 `className`）。下面这些方式都可以用来渲染响应式图片：
+
+### 1. 使用静态导入的响应式图片
+
+如果源图片不是动态的，你可以通过静态导入创建一个响应式图片：
+
+```javascript
+// components/author.js
+import Image from 'next/image'
+import me from '../photos/me.jpg'
+
+export default function Author() {
+  return (
+    <Image
+      src={me}
+      alt="Picture of the author"
+      sizes="100vw"
+      style={{
+        width: '100%',
+        height: 'auto',
+      }}
+    />
+  )
+}
+```
+
+### 2. 保持宽高比的响应式图片
+
+如果源图片是动态或者远程 URL，你需要提供 `width` 和 `height` 来设置正确的响应式图片宽高比。
+
+```javascript
+// components/page.js
+import Image from 'next/image'
+
+export default function Page({ photoUrl }) {
+  return (
+    <Image
+      src={photoUrl}
+      alt="Picture of the author"
+      sizes="100vw"
+      style={{
+        width: '100%',
+        height: 'auto',
+      }}
+      width={500}
+      height={300}
+    />
+  )
+}
+```
+
+### 3. 使用 fill 属性的响应式图片
+
+如果你不知道图片宽高比，那可以考虑使用 `fill` 属性，注意设置父元素为 `postion:relative` 当然不用这种方式。也可以使用 `object-fit` ，具体看你想要什么样的效果：
+
+```javascript
+// app/page.js
+import Image from 'next/image'
+
+export default function Page({ photoUrl }) {
+  return (
+    <div style={{ position: 'relative', width: '500px', height: '300px' }}>
+      <Image
+        src={photoUrl}
+        alt="Picture of the author"
+        sizes="500px"
+        fill
+        style={{
+          objectFit: 'contain',
+        }}
+      />
+    </div>
+  )
+}
+```
+
+## 主题判断
+
+如果你希望实现浅色和深色模式下显示不同的图片，你可以创建一个新组件包含两个 `<Image>` 组件，然后通过 CSS 媒体查询显示正确的那一个：
+
+```css
+// omponents/theme-image.module.css
+.imgDark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .imgLight {
+    display: none;
+  }
+  .imgDark {
+    display: unset;
+  }
+}
+```
+
+```javascript
+// components/theme-image.tsx
+import styles from './theme-image.module.css'
+import Image from 'next/image'
+
+const ThemeImage = (props) => {
+  const { srcLight, srcDark, ...rest } = props
+
+  return (
+    <>
+      <Image {...rest} src={srcLight} className={styles.imgLight} />
+      <Image {...rest} src={srcDark} className={styles.imgDark} />
+    </>
+  )
+}
+```
+
+## 累计布局偏移
+
+在使用 Next.js 图片组件的时候，你会发现，Next.js 要求必须有 width 和 height 属性，哪怕使用静态导入图片的方式，也只是不用自己手写这两个属性而已，Next.js 依然会为你自动添加 width 和 height，之所以这样做，就是为了防止发生布局偏移。所谓布局偏移，顾名思义，原本内容的位置突然发生偏移，多出现在加载的时候。导致布局偏移的原因有很多，图片没有尺寸是常见的一个原因。
+
+![38UiHViz44OWqlKFe1VC.gif](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/37363353c8254f8c8f85010e5d9e9211~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1920&h=1080&s=782430&e=gif&f=187&b=fdfcff)
+
+你会发现图片在加载的时候，浏览器为图片预留了位置。
+
+不要小瞧布局偏移，为此专门有累计布局偏移（Cumulative Layout Shift，简称 CLS）这个 Web 性能衡量指标。这可是 Google 三大[核心网页指标](https://web.dev/articles/vitals?hl=zh-cn#core_web_vitals)之一。累计布局偏移会统计视口中可见内容的移动量以及移动的距离，综合算出一个得分。
+
+`next/image` 的设计就是为了防止发生布局偏移，所以如果要调整图片大小，应该使用下面三种方式之一：
+
+1. 自动静态导入
+2. 显示声明 `width` 和 `height` 属性
+3. 隐式声明，通过使用 fill 让图片填充父元素
