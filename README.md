@@ -1502,3 +1502,275 @@ const ThemeImage = (props) => {
 1. 自动静态导入
 2. 显示声明 `width` 和 `height` 属性
 3. 隐式声明，通过使用 fill 让图片填充父元素
+
+## font
+
+Next.js 内置了 `next/font` 组件，相比于传统使用字体的方式，使用 font 组件会更加灵活便捷。font 组件的使用主要分为两块，一块是 Google 字体，一块是本地字体，都是通过 font 组件实现，但具体配置上会略有不同。
+
+## 1. 传统使用字体
+
+我们先讲讲传统使用字体的方式。
+
+最基本的方法是通过 `@font-face`指定一个自定义字体，字体文件可以来自远程文件，也可以来自本地文件。然后在 `font-family` 中使用该字体。
+
+```css
+// global.css
+@font-face {
+  font-family: 'Bitstream Vera Serif Bold';
+  src: url('https://mdn.github.io/css-examples/web-fonts/VeraSeBd.ttf');
+}
+
+body {
+  font-family: 'Bitstream Vera Serif Bold', serif;
+}
+```
+
+借助 [Google Fonts](https://fonts.google.com/) 这样的字体网站，我们可以快速生成样式文件，再通过 `link` 标签或者 `@import` 的方式直接使用。
+
+方式一：使用 `link` 标签：
+
+```javascript
+// layout.js
+export default function Layout({ children }) {
+  return (
+    <html>
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+```css
+// globals.css
+body {
+  font-family: 'Ma Shan Zheng', serif;
+}
+```
+
+方式二：使用 `@import`：
+
+```css
+// globals.css
+@import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
+
+body {
+  font-family: 'Ma Shan Zheng', serif;
+}
+```
+
+## next/font/google
+
+### 3.1. 使用示例
+
+借助 `next/font/google`，我们不需要像以前一样到 Google Fonts 复制样式文件的链接，并通过 link 或者 import 导入，而是可以直接导入想要使用的字体。使用示例如下：
+
+```javascript
+// app/layout.js
+// 1. 导入想要使用的字体
+import { Inter } from 'next/font/google'
+
+// 2. 实例化字体对象，设置使用子集等
+const inter = Inter({
+  subsets: ['latin'],
+})
+
+//  3. 应用，inter.className 会返回一个只读的 CSS 类名用于加载字体
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en" className={inter.className}>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+最终实现的代码为：
+
+![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a21325f8edb24dd5b891f2fcd5207b00~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1624&h=474&s=211319&e=png&b=2a2a2a)
+
+Next.js 推荐使用[可变字体](https://fonts.google.com/variablefonts)来获得最佳的性能和灵活性。如果不能使用可变字体，你需要声明 weight（字重，是指字体的粗细程度）:
+
+```javascript
+// app/layout.js
+import { Roboto } from 'next/font/google'
+
+const roboto = Roboto({
+  weight: '400',
+  subsets: ['latin'],
+})
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en" className={roboto.className}>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+### 3.2. 可变字体
+
+那什么是可变字体呢？所谓可变字体，引用维基百科的介绍：
+
+> OpenType 可变字体（英语：OpenType variable fonts）是字体格式 OpenType 在 1.8 版规范中引入的扩展规范，由苹果、微软、谷歌和 Adobe 联合开发，于 2016 年 9 月 14 日 正式发布。支持这一规范的计算机字体可以储存轮廓变化数据，在初始字形轮廓的基础上自动生成丰富的变化造型，使用户可以自由调整文字的外观。
+
+简单的来说，可变字体可以自由调整字宽、字重、倾斜等，从而实现一款字体展示出多款字体的效果。Next.js 推荐使用可变字体。
+
+你也可以使用数组指定多个 weight、样式：
+
+```javascript
+// app/layout.js
+const roboto = Roboto({
+  weight: ['400', '700'],
+  style: ['normal', 'italic'],
+  subsets: ['latin'],
+  display: 'swap',
+})
+```
+
+如果字体是多单词，使用下划线（`_`）连接，比如 Roboto Mono，导入的时候写成 `Roboto_Mono`：
+
+```javascript
+// app/layout.js
+import { Ma_Shan_Zheng } from 'next/font/google'
+
+const font = Ma_Shan_Zheng({
+  subsets: ['latin'],
+  weight: '400',
+})
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en" className={font.className}>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+## 4. next/font/local
+
+使用本地字体，通过 `next/font/local`并使用 `src`声明本地文件的地址。Next.js 依然推荐使用可变字体。使用示例如下：
+
+```javascript
+// app/layout.js
+import localFont from 'next/font/local'
+
+const myFont = localFont({
+  src: './my-font.woff2',
+  display: 'swap',
+})
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en" className={myFont.className}>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+`src` 也可以是数组形式，比如一个字体使用多个本地文件：
+
+```javascript
+onst roboto = localFont({
+  src: [
+    {
+      path: './Roboto-Regular.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: './Roboto-Italic.woff2',
+      weight: '400',
+      style: 'italic',
+    },
+    {
+      path: './Roboto-Bold.woff2',
+      weight: '700',
+      style: 'normal',
+    },
+    {
+      path: './Roboto-BoldItalic.woff2',
+      weight: '700',
+      style: 'italic',
+    },
+  ],
+})
+```
+
+### 7.2. 搭配 Tailwind CSS
+
+`next/font` 可以通过 CSS 变量的形式与 Tailwind CSS 搭配使用。
+
+首先通过 `variable`声明 CSS 变量：
+
+```javascript
+// app/layout.js
+import './globals.css'
+import { Ma_Shan_Zheng, Roboto_Mono } from 'next/font/google'
+
+const ma_shan_zheng = Ma_Shan_Zheng({
+  subsets: ['latin'],
+  display: 'swap',
+  weight: '400',
+  variable: '--font-ma-shan-zheng',
+})
+
+const roboto_mono = Roboto_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-roboto-mono',
+})
+
+export default function RootLayout({ children }) {
+  return (
+    <html
+      lang="en"
+      className={`${ma_shan_zheng.variable} ${roboto_mono.variable}`}
+    >
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+```css
+// globals.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+然后，将 CSS 变量添加到 Tailwind CSS 配置中：
+
+```javascript
+// tailwind.config.js
+module.exports = {
+  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
+  theme: {
+    extend: {
+      fontFamily: {
+        ma: ['var(--font-ma-shan-zheng)'],
+        mono: ['var(--font-roboto-mono)'],
+      },
+    },
+  },
+  plugins: [],
+}
+```
+
+最后，以 `font-` 作为前缀如（`font-ma`、`font-mono`）为元素添加样式：
+
+```jsx
+// page.js
+export default function Page() {
+  return <h1 className="font-ma underline">你好，世界！Hello World!</h1>
+}
+```
