@@ -2137,3 +2137,12 @@ export default function Page() {
 ```
 
 注意：`onError` 不能在服务端组件中使用，只能在客户端中使用。而且 `onError` 也不能和 `beforeInteractive` 一起使用。
+
+## Metadata
+
+元数据的丰富会改善 SEO 和 web 可共享性（比如定义一些特殊的字段用于内容分享到一些社交平台），为了方便定义和管理这些元数据，Next.js 提供了 Metadata API。在 Next.js 中，添加元数据的方法分为两类：
+
+1.  基于配置的元数据：在 `layout.js`或 `page.js`中导出一个静态 `metadata` 对象或者一个动态的 `generateMetadata` 函数。
+2.  基于文件的元数据：添加一个静态或者动态生成的特殊文件
+
+通过这些选项，Next.js 会自动为页面生成相关的 `<head>` 元素。
