@@ -2146,3 +2146,558 @@ export default function Page() {
 2.  基于文件的元数据：添加一个静态或者动态生成的特殊文件
 
 通过这些选项，Next.js 会自动为页面生成相关的 `<head>` 元素。
+
+### 1.1. 静态元数据
+
+要定义一个静态元数据，需要从 `layout.js` 或者 `page.js` 文件中导出一个 `Metadata` 对象：
+
+```javascript
+// layout.js | page.js
+export const metadata = {
+  title: '...',
+  description: '...',
+}
+
+export default function Page() {}
+```
+
+具体 Metadata 对象有哪些字段呢？我数了数[源码中的字段](https://github.com/vercel/next.js/blob/canary/packages/next/src/lib/metadata/default-metadata.tsx)，有 31 个，因为内容很多，所以放在本篇后面具体讲解。我们先了解下主要的定义元数据的方式。
+
+### 1.2. 动态元数据
+
+动态元数据是指依赖动态信息如当前路由参数、外部数据、父级路由段`metadata`等信息的元数据。要定义动态元数据，需要导出一个名为 `generateMetadata`的函数，该函数返回一个 Metadata 对象。使用示例如下：
+
+```javascript
+// app/products/[id]/page.js
+export async function generateMetadata({ params, searchParams }, parent) {
+  // 读取路由参数
+  const id = params.id
+
+  // 获取数据
+  const product = await fetch(`https://.../${id}`).then((res) => res.json())
+
+  // 获取和拓展父路由段 metadata
+  const previousImages = (await parent).openGraph?.images || []
+
+  return {
+    title: product.title,
+    openGraph: {
+      images: ['/some-specific-page-image.jpg', ...previousImages],
+    },
+  }
+}
+
+export default function Page({ params, searchParams }) {}
+```
+
+让我们详细讲解下 generateMetadata 函数。该函数接收两个参数，`props` 和 `parent`。
+
+`props` 指的是包含当前路由参数的对象，该对象又有两个字段，一个是 `params`，一个是 `searchParams`。
+
+- params 包含当前动态路由参数的对象，让我们举些例子你就知道了:
+
+| **Route**                       | **URL**   | **params**              |
+| ------------------------------- | --------- | ----------------------- |
+| app/shop/\[slug]/page.js        | /shop/1   | { slug: '1' }           |
+| app/shop/\[tag]/\[item]/page.js | /shop/1/2 | { tag: '1', item: '2' } |
+| app/shop/\[...slug]/page.js     | /shop/1/2 | { slug: \['1', '2'] }   |
+
+那如果访问的不是动态路由呢？那 params 就是一个空对象 `{}`。
+
+- `searchParams` 是一个包含当前 URL 搜索参数的对象，举个例子：
+
+| **URL 网址**   | **searchParams**   |
+| -------------- | ------------------ |
+| /shop?a=1      | { a: '1' }         |
+| /shop?a=1\&b=2 | { a: '1', b: '2' } |
+| /shop?a=1\&a=2 | { a: \['1', '2'] } |
+
+`searchParams` 只在 `page.js` 中会有。
+
+而 `parent` 是一个包含父路由段 metadata 对象的 promise 对象，所以示例代码中用的是 `(await parent).openGraph`获取。
+
+注意：无论是静态元数据还是动态元数据**都只在服务端组件中支持**。如果不依赖运行时的信息，则应该尽可能使用静态元数据方式。
+
+缓存篇里也会讲，在 `generateMetadata`、`generateStaticParams`、布局、页面和服务端组件中的 fetch 请求会自动记忆化，所以不用担心多次请求有性能损失。
+
+Next.js 会在等待 `generateMetadata`中数据请求完毕再开始 UI 流式传输给客户端，这可以保证流式响应的第一部分包含 `<head>` 标签。
+
+## 2. 基于文件（File-based）
+
+这些特殊的文件都可用于元数据：
+
+- favicon.ico、apple-icon.jpg 和 icon.jpg
+- opengraph-image.jpg 和 twitter-image.jpg
+- robots.txt
+- sitemap.xml
+
+基于文件是什么意思呢？我们以 icon 为例，icon 被用于设置浏览器网页标签的图标，虽然也可以使用静态元数据的方式设置（具体讲 metadata 对象的时候会讲到），但是 Next.js 提供了更便捷的方式，那就是约定一个文件名为 `icon` 的图片，格式支持 `.ico`、`.jpg`, `.jpeg`, `.png`, `.svg`。也就是添加一个名为 `icon.(ico|jpg|jpeg|png|svg)`的图片，Next.js 就会为该路由生成对应的元数据标签：
+
+```html
+<link
+  rel="icon"
+  href="/icon?<generated>"
+  type="image/<generated>"
+  sizes="<generated>"
+/>
+```
+
+甚至如果你想动态生成该图片也可以实现，约定一个名为 `icon.(js|.ts|.tsx)`的文件，返回一张图片即可。
+
+其他文件也是同理，使用这种方式快捷直观。不过具体这些文件该怎么设置，因为涉及的 API 太多，统一放在后面讲解。
+
+要注意：基于文件的元数据具有更高的优先级，并会覆盖任何基于配置的元数据。
+
+## 3. 行为
+
+### 3.1. 默认字段
+
+有两个默认的 `meta` 标签，即使路由未定义元数据也会添加，一个是设置网站字符编码的 `charset`，一个是设置网站视口宽度和比例的 `viewport`：
+
+```html
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+```
+
+当然这两个元数据标签也都是可以覆盖的。
+
+### 3.2. 顺序
+
+一个页面和它的布局以及它的父布局，都设置了一些元数据字段，有的字段重复，有的字段不同，那么 Next.js 该怎么处理呢？
+
+这个逻辑其实我们也很容易想到，具体页面的设置应该优先级更高。Next.js 就是按照从根路由到 `page.js`的顺序处理，比如当你访问 `/blog/1`，处理顺序为：
+
+1.  `app/layout.tsx`（根布局）
+2.  `app/blog/layout.tsx`（嵌套布局布局）
+3.  `app/blog/[slug]/page.tsx`（具体页面）
+
+### 3.3. 字段覆盖
+
+Next.js 会按照这个顺序，将各层元数据对象**浅合并**，计算得到最终的元数据。重复的将会根据顺序进行替换。让我们举个例子，加入根布局的 `metadata` 设置为：
+
+```javascript
+// app/layout.js
+export const metadata = {
+  title: 'Acme',
+  openGraph: {
+    title: 'Acme',
+    description: 'Acme is a...',
+  },
+}
+```
+
+`page.js` 的设置为：
+
+```javascript
+// app/blog/page.js
+export const metadata = {
+  title: 'Blog',
+  openGraph: {
+    title: 'Blog',
+  },
+}
+
+// 输出:
+// <title>Blog</title>
+// <meta property="og:title" content="Blog" />
+```
+
+在这个例子中：
+
+1.  `app/layout.js` 中的 `title` 被 `app/blog/page.js` 中的 `title` 替换
+2.  `app/layout.js` 中的 `openGraph` 字段被 `app/blog/page.js` 中的 `openGraph` 替换，注意因为是浅合并，所以 `description` 字段丢失了。
+
+如果你想在多个路由之间共享一些字段，那你可以将他们提取到一个单独的变量中，比如在 `app`下建立一个 `shared-metadata.js`文件共享的字段：
+
+```javascript
+// app/shared-metadata.js
+export const openGraphImage = { images: ['http://...'] }
+```
+
+当需要使用时：
+
+```javascript
+// app/page.js
+import { openGraphImage } from './shared-metadata'
+
+export const metadata = {
+  openGraph: {
+    ...openGraphImage,
+    title: 'Home',
+  },
+}
+```
+
+```javascript
+// app/about/page.js
+import { openGraphImage } from '../shared-metadata'
+
+export const metadata = {
+  openGraph: {
+    ...openGraphImage,
+    title: 'About',
+  },
+}
+```
+
+在这个例子中，OG 图片在 `app/layout.js` 和 `app/about/page.js` 中共享，然而 `title` 却是不同的。
+
+### 3.4. 字段继承
+
+比如根布局的设置为：
+
+```javascript
+// app/layout.js
+export const metadata = {
+  title: 'Acme',
+  openGraph: {
+    title: 'Acme',
+    description: 'Acme is a...',
+  },
+}
+```
+
+页面的设置为：
+
+```javascript
+// app/about/page.js
+export const metadata = {
+  title: 'About',
+}
+
+// 输出:
+// <title>About</title>
+// <meta property="og:title" content="Acme" />
+// <meta property="og:description" content="Acme is a..." />
+```
+
+在这个例子中：
+
+- `app/layout.js` 中的 `title` 被 `app/about/page.js` 中的 `title` 替代
+- `app/layout.js` 中的所有 `openGraph` 字段被 `app/about/page.js` 继承，因为 `app/about/page.js` 没有设置 `openGraph` 字段
+
+## 懒加载
+
+Next.js 基于懒加载做了很多优化，实现了延迟加载客户端组件和导入库，只在需要的时候才在客户端引入它们。举个例子，比如延迟加载模态框相关的代码，直到用户点击打开的时候。
+
+在 Next.js 中有两种方式实现懒加载：
+
+1.  使用 `React.lazy()` 和 `Suspense`
+2.  使用 `next/dynamic`实现动态导入
+
+默认情况下，服务端组件自动进行代码分隔，并且可以使用流将 UI 片段逐步发送到客户端，所以懒加载应用于客户端。
+
+## React.lazy 与 Suspense
+
+我们先讲讲 React 的 lazy 方法，lazy 可以实现延迟加载组件代码，直到组件首次被渲染。换句话说，直到组件需要渲染的时候才加载组件的代码。使用示例如下：
+
+```javascript
+import { lazy } from 'react'
+
+const MarkdownPreview = lazy(() => import('./MarkdownPreview.js'))
+```
+
+通过在组件外部调用 lazy 方法声明一个懒加载的 React 组件，非常适合搭配 `<Suspense>` 组件使用：
+
+```javascript
+<Suspense fallback={<Loading />}>
+  <h2>Preview</h2>
+  <MarkdownPreview />
+</Suspense>
+```
+
+一个简单完整的例子如下：
+
+```javascript
+import { Suspense, lazy } from 'react'
+
+const MarkdownPreview = lazy(() => import('./MarkdownPreview.js'))
+
+export default function Page() {
+  return (
+    <Suspense fallback={'loading'}>
+      <h2>Preview</h2>
+      <MarkdownPreview />
+    </Suspense>
+  )
+}
+```
+
+当然这个例子在实际开发中并无意义，因为延迟加载的目的在于需要的时候才去加载，结果这里没有条件判断就直接开始了加载，那还用延迟加载干什么，徒然降低了性能和加载时间。
+
+React 官网提供了一个非常的好的完整示例：<https://react.dev/reference/react/lazy#suspense-for-code-splitting>
+
+```javascript
+import { useState, Suspense, lazy } from 'react'
+import Loading from './Loading.js'
+
+const MarkdownPreview = lazy(() => delayForDemo(import('./MarkdownPreview.js')))
+
+export default function MarkdownEditor() {
+  const [showPreview, setShowPreview] = useState(false)
+  const [markdown, setMarkdown] = useState('Hello, **world**!')
+  return (
+    <>
+      <textarea
+        value={markdown}
+        onChange={(e) => setMarkdown(e.target.value)}
+      />
+      <label>
+        <input
+          type="checkbox"
+          checked={showPreview}
+          onChange={(e) => setShowPreview(e.target.checked)}
+        />
+        Show preview
+      </label>
+      <hr />
+      {showPreview && (
+        <Suspense fallback={<Loading />}>
+          <h2>Preview</h2>
+          <MarkdownPreview markdown={markdown} />
+        </Suspense>
+      )}
+    </>
+  )
+}
+
+// 添加一个固定的延迟时间，以便你可以看到加载状态
+function delayForDemo(promise) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 2000)
+  }).then(() => promise)
+}
+```
+
+在这个例子中，只有当用户点击了 Show preview 选择框，`showPreview` 为 `true` 的时候才去加载 `<Suspense>` 和 `<MarkdownPreview>` 组件，这是更符合实际开发中的例子。
+
+![1.gif](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/82c7bd19fe5243ce9156126645ae7ca2~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=721&h=249&s=12410&e=gif&f=10&b=fdfdfd)
+
+## next/dynamic
+
+不过开发 Next.js 应用的时候，大部分时候并不需要用到 React.lazy 和 Suspense，使用 `next/dynamic` 即可，它本质就是 React.lazy 和 Suspense 的复合实现。在 `app`和 `pages`目录下都可以使用。
+
+### 1. 基本示例
+
+它的基本用法如下：
+
+```javascript
+import dynamic from 'next/dynamic'
+
+const WithCustomLoading = dynamic(
+  () => import('../components/WithCustomLoading'),
+  {
+    loading: () => <p>Loading...</p>,
+  },
+)
+
+export default function Page() {
+  return (
+    <div>
+      <WithCustomLoading />
+    </div>
+  )
+}
+```
+
+dynamic 函数的第一个参数表示加载函数，用法同 lazy 函数。第二个参数表示配置项，可以设置加载组件，如同 Suspense 中的 fallback。看似很简单，但使用的时候也有很多细节要注意：
+
+1.  import() 中的路径不能是模板字符串或者是变量
+2.  import() 必须在 dynamic() 中调用
+3.  dynamic() 跟 lazy() 函数一样，需要放在模块顶层
+
+前面我们讲过懒加载只应用于客户端的，如果动态导入的是一个服务端组件，只有这个服务端组件中的客户端组件才会被懒加载，服务端组件本身是不会懒加载的。
+
+```javascript
+// app/page.js
+import dynamic from 'next/dynamic'
+
+// Server Component:
+const ServerComponent = dynamic(() => import('../components/ServerComponent'))
+
+export default function ServerComponentExample() {
+  return (
+    <div>
+      <ServerComponent />
+    </div>
+  )
+}
+```
+
+### 2. 跳过 SSR
+
+之前讲客户端组件和服务端组件的时候，客户端组件默认也是会被预渲染的（SSR）。如果要禁用客户端组件的预渲染，可以将 `ssr` 选项设置为 `false`。让我们看个例子：
+
+```javascript
+'use client'
+// app/page.js
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
+
+// Client Components:
+const ComponentA = dynamic(() => import('../components/a.js'))
+const ComponentB = dynamic(() => import('../components/b.js'))
+const ComponentC = dynamic(() => import('../components/c.js'), { ssr: false })
+
+export default function ClientComponentExample() {
+  const [showMore, setShowMore] = useState(false)
+
+  return (
+    <div>
+      {/* 立刻加载，但会使用一个独立的客户端 bundle */}
+      <ComponentA />
+
+      {/* 按需加载 */}
+      {showMore && <ComponentB />}
+      <button onClick={() => setShowMore(!showMore)}>Toggle</button>
+
+      {/* 只在客户端加载 */}
+      <ComponentC />
+    </div>
+  )
+}
+```
+
+三个组件内容相同，都是：
+
+```javascript
+'use client'
+
+export default function Page() {
+  return <h1>Hello World!</h1>
+}
+```
+
+加载效果如下：
+
+![10.gif](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/aa116662caa84e0c95f3d187204ba3ae~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=747&h=353&s=22839&e=gif&f=17&b=fefefe)
+
+从效果上看，设置 `ssr` 为 `false` 的 `<ComponentC>` 会比 `<ComponentA>` 晚显示，`<ComponentB>` 在点击的时候才会显示。
+
+这三个组件的加载到底有什么区别呢？
+
+首先是预渲染，`ComponentA` 默认会被预渲染，`ComponentC` 因为设置了 `ssr` 为 `false`，不会被预渲染，也就是说，如果查看页面的 HTML 源码，可以看到这样的渲染代码：
+
+```html
+<div>
+  <h1>Hello World!</h1>
+  <button>Toggle</button>
+  <template data-dgst="NEXT_DYNAMIC_NO_SSR_CODE"></template>
+</div>
+```
+
+`ComponentA` 渲染了 HTML，`ComponentC` 只是留了一个占位。所以加载的时候，`ComponentA` 立刻就渲染了出来，`ComponentC` 会先显示空白，然后再展示出内容。
+
+其次是 bundle，三个动态加载的组件都会打包成一个单独的包，`ComponentA` 和 `ComponentC` 的包都会尽快加载，CompoentB 的包会在点击按钮的时候才加载：
+
+![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e0dc5c7a2d9c45a3b73163ee2fe0bbea~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2168&h=1082&s=365204&e=png&b=272727)
+
+那你可能要问了，这个组件不就一个 Hello World！吗？`ComponentB` 在点击的时候才渲染，确实需要加载。`ComponentC` 只有一个占位，也确实需要加载，可 `ComponentA` 有什么可加载的？
+
+这个例子比较简单，但实际开发并不如此，SSR 只能渲染出无交互的 HTML，还需要再加载一个 JS 文件，用于给比如 HTML 元素上添加事件，使其具有交互能力等（这个过程又称为水合）。所以使用懒加载的组件 Next.js 会打包一个单独的 bundle。
+
+### 3. 导入命名导出（Named Exports）
+
+JavaScript 支持两种导出方式：默认导出（default export）和命名导出（named export）。
+
+```javascript
+// 默认导出
+export default function add(a, b) {
+  return a + b
+}
+```
+
+```javascript
+// 命名导出
+export function add(a, b) {
+  return a + b
+}
+```
+
+如果要动态导入一个命名导出的组件，用法会略有不同，直接举个示例代码：
+
+假如要导入 Hello 组件，然而 Hello 组件以命名导出的形式导出：
+
+```javascript
+'use client'
+// components/hello.js
+export function Hello() {
+  return <p>Hello!</p>
+}
+```
+
+关键字 import 可以像调用函数一样来动态的导入模块。以这种方式调用，将返回一个 promise，将模块作为对象传入 then 函数：
+
+```javascript
+// app/page.js
+import dynamic from 'next/dynamic'
+
+const ClientComponent = dynamic(() =>
+  import('../components/hello').then((mod) => mod.Hello),
+)
+```
+
+## 加载外部库
+
+使用 `import()`函数可以按需加载外部库，比如当用户在搜索框输入的时候才开始加载模糊搜索库，这个例子就演示了如何使用 `fuse.js` 实现模糊搜索。
+
+```javascript
+'use client'
+// app/page.js
+import { useState } from 'react'
+
+const names = ['Tim', 'Joe', 'Bel', 'Lee']
+
+export default function Page() {
+  const [results, setResults] = useState()
+
+  return (
+    <div>
+      <input
+        type="text"
+        placeholder="Search"
+        onChange={async (e) => {
+          const { value } = e.currentTarget
+          const Fuse = (await import('fuse.js')).default
+          const fuse = new Fuse(names)
+
+          setResults(fuse.search(value))
+        }}
+      />
+      <pre>Results: {JSON.stringify(results, null, 2)}</pre>
+    </div>
+  )
+}
+```
+
+## 谈谈懒加载
+
+本篇的最后，我们简单聊聊在开发中使用懒加载的感受。Next.js 中的懒加载看似很好，但其实应用中有很多局限。就以刚才的例子为例：
+
+```javascript
+'use client'
+
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
+
+const ComponentA = dynamic(() => import('../components/a.js'))
+const ComponentB = dynamic(() => import('../components/b.js'))
+const ComponentC = dynamic(() => import('../components/c.js'), { ssr: false })
+
+export default function ClientComponentExample() {
+  const [showMore, setShowMore] = useState(false)
+
+  return (
+    <div>
+      <ComponentA />
+      {showMore && <ComponentB />}
+      <button onClick={() => setShowMore(!showMore)}>Toggle</button>
+      <ComponentC />
+    </div>
+  )
+}
+```
+
+首先，为了实现懒加载，我们需要将组件抽离到单独的文件中，这样做虽然有些繁琐，倒也可以接受。
+
+其次，在这个例子中，其实只有 ComponentB 应用懒加载是有用的，ComponentA 和 ComponentC 应用懒加载，会导致初始加载的时候多加载两个 bundle，反而因为浏览器同时请求多个 bundle 降低了加载速度。所以懒加载的例子都是**应用于那些初始并不渲染的组件**。
