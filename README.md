@@ -3234,3 +3234,591 @@ module.exports = {
   "extends": ["eslint:recommended", "next"]
 }
 ```
+
+# API 篇
+
+## next.config.js
+
+正如文件的扩展名是 `.js`，`next.config.js` 是一个常规的 Node.js 模块，而不是一个 JSON 文件。它会在 Next.js server 和构建阶段被用到，并且不包含在浏览器构建中（代码不会打包到客户端）。
+
+## 1. headers
+
+### 1.1. 介绍
+
+Headers 用于设置自定义 HTTP 标头，使用 `next.config.js` 的 `headers`字段：
+
+```javascript
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/about',
+        headers: [
+          {
+            key: 'x-custom-header',
+            value: 'my custom header value',
+          },
+          {
+            key: 'x-another-custom-header',
+            value: 'my other custom header value',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+此时访问 `/about`，可以看到：
+
+![截屏2023-11-09 下午3.40.56.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ca0818d69f76450182e9e9834080e0eb~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2304\&h=1528\&s=400155\&e=png\&b=2a2a2a)
+
+`headers`是一个异步函数，该函数返回一个包含 `soruce` 和 `headers` 属性的对象数组，其中：
+
+*   `source` 表示传入的请求路径
+*   `headers` 是一个包含 key 和 value 属性的响应标头对象数组
+
+除了这两个值外，还可以设置：
+
+*   `basePath`：`false` 或者 `undefined`。当值为 `false` ，匹配时不会包含 `basePath`，只能用于外部重写
+*   `locale`：`false` 或者 `undefined`，匹配时是否应该包含 locale
+*   `has`：一个有 `type`、`key`、`value` 属性的对象数组
+*   `missing`：一个有 `type`、`key`、`value` 属性的对象数组
+
+headers 会在文件系统（包括页面和 `/public` 文件）之前被触发。
+
+这些字段我们来一一举例介绍。
+
+### 1.2. source
+
+source 表示传入的请求路径，除了可以匹配具体的值，还支持三种匹配模式：
+
+#### 路径匹配
+
+普通的路径匹配，举个例子，`/blog:slug` 会匹配 `/blog/hello-world`（无嵌套路径，也就是说 `/blog/hello-world/about`不会匹配）
+
+```javascript
+// next.config.js
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/blog/:slug',
+        headers: [
+          {
+            key: 'x-slug',
+            value: ':slug', // 匹配参数可以在 value 中使用
+          },
+          {
+            key: 'x-slug-:slug', // 匹配参数可以在 key 中使用
+            value: 'my other custom header value',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+访问 `/blog/hello-world`，可以看到：
+
+![截屏2023-11-09 下午4.00.05.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f430b2c5e9a44a7d88dcaf32a3bdbad9~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2294\&h=1516\&s=410172\&e=png\&b=2a2a2a)
+
+但访问 `/blog/hello-world/about`就不会有自定义标头。
+
+#### 通配符路径匹配
+
+在参数后使用 `*` 实现通配符路径匹配，举个例子：`/blog/:slug*` 会匹配 `/blog/a/b/c/d/hello-world`：
+
+```javascript
+// next.config.js
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/blog/:slug*',
+        headers: [
+          {
+            key: 'x-slug',
+            value: ':slug*',
+          },
+          {
+            key: 'x-slug-:slug*',
+            value: 'my other custom header value',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+访问 `/blog/hello-world/about`，可以看到：
+
+![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/72fc974d27674c02a4e40057c49cc1ac~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=786\&h=84\&s=20629\&e=png\&b=282828)
+
+访问 `/blog/hello-world` 也是有的：
+
+![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0c5756cc8262461a945a66436db9ee92~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=700\&h=88\&s=17996\&e=png\&b=282828)
+
+#### 正则表达式路径匹配
+
+在参数后用括号将正则表达式括住实现正则表达式匹配，举个例子：`blog/:slug(\\d{1,})` 匹配 `/blog/123` 而不匹配 `/blog/abc`
+
+```javascript
+// next.config.js
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/blog/:post(\\d{1,})',
+        headers: [
+          {
+            key: 'x-post',
+            value: ':post',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+访问 `/blog/123`，可以看到：
+
+![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0738859e301945d9967e538636722a43~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=402\&h=52\&s=7281\&e=png\&b=282828)
+
+注意：这 8 个字符  `(`、`)`、 `{`、 `}`、 `:`、 `*`、 `+`、 `?` 都会用于正则表达式匹配，所以需要用到这些字符本身的时候，使用 `\\`转义
+
+```javascript
+// next.config.js
+module.exports = {
+  async headers() {
+    return [
+      {
+        // 匹配 `/english(default)/something`
+        source: '/english\\(default\\)/:slug',
+        headers: [
+          {
+            key: 'x-header',
+            value: 'value',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+### 1.3. headers
+
+headers 无须多说，我们聊聊 headers 的覆盖行为。
+
+如果两个 headers 匹配相同的路径以及设置了相同的 header key，最后一个 header 的 key 会覆盖前一个。举个例子：
+
+```javascript
+// next.config.js
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'x-hello',
+            value: 'there',
+          },
+        ],
+      },
+      {
+        source: '/hello',
+        headers: [
+          {
+            key: 'x-hello',
+            value: 'world',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+在这个例子中，当访问 `/hello` 时，既匹配 `/:path*`，又匹配 `/hello`，而两个 source 对应设置的 `x-hello` 的 key 值不同，因为`/hello` 是最后一个 header，所以最终的值是 `world`。
+
+那如果匹配了相同的路径，但设置的  header key 不冲突呢？那就都会添加，举个例子：
+
+```javascript
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'hello',
+            value: 'hello',
+          },
+          {
+            key: 'hello2',
+            value: 'hello2',
+          }
+        ],
+      },
+      {
+        source: '/hello',
+        headers: [
+          {
+            key: 'hello',
+            value: 'world',
+          },
+          {
+            key: 'hello3',
+            value: 'hello3',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+最终的结果为：
+
+![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ea5a1ecfec794a40b85c6684899f2914~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=248\&h=128\&s=11341\&e=png\&b=282828)
+
+### 1.4. basePath
+
+`basePath`的值为 `false` 或者 `undefined`。当值为 `false` ，匹配时不会包含 `basePath`，举个例子：
+
+```javascript
+// next.config.js
+module.exports = {
+  basePath: '/docs',
+ 
+  async headers() {
+    return [
+      {
+        source: '/with-basePath', // 匹配 /docs/with-basePath
+        headers: [
+          {
+            key: 'x-hello',
+            value: 'world',
+          },
+        ],
+      },
+      {
+        source: '/without-basePath', // 匹配 /without-basePath
+        headers: [
+          {
+            key: 'x-hello',
+            value: 'world',
+          },
+        ],
+        basePath: false, // 因为设置了 false
+      },
+    ]
+  },
+}
+```
+
+在这个例子中，设置了 `basePath` 为 `/docs`，正常 headers 中的 source 会匹配 basePath + source 构成的链接，除非你设置了 `basePath` 为 `false`。
+
+### 1.5. locale
+
+`locale` 的值为 `false` 或者 `undefined`，决定匹配时是否应该包含 locale，其实效果跟 basePath 类似.
+
+考虑到部分同学对 `locale` 不太熟悉，我们先简单的讲下 `locale`配置项，locale 的作用就是国际化（i18n），`next.config.js` 针对 Pages Router 提供了 i18n 配置项，注意是在 Pages Router 下，在 App Router 下 Next.js 已经不再提供直接的支持，具体内容查看小册国际化章节。
+
+比如我们在 `pages` 目录下新建一个 `article.js` 文件：
+
+```javascript
+// pages/article.js
+export default function Home() {
+  return  <h1>Hello Article!</h1>
+}
+```
+
+然后 `next.config.js` 修改配置项：
+
+```javascript
+// next.config.js
+module.exports = {
+  i18n: {
+    locales: ['en', 'fr', 'de', 'zh'],
+    defaultLocale: 'zh',
+  }
+}
+```
+
+此时，访问 `/en/article`、`/fr/article`、`/de/article` 都会重写为 `/article`，注意是重写，就是路由地址不变，但内容是 `/article`的内容。访问 `/zh/article` 会重定向到 `/article`。
+
+而如果你在 `app/article`目录下新建一个 `article.js` 文件，文件内容同上。
+
+此时，访问 `/en/article`、`/fr/article`、`/de/article` 都会 404 错误。访问 `/zh/article` 会重写为 `/article`。说明在 App Router 下只有 `i18n.defaultLocale` 是生效的。
+
+好了，基本介绍完毕，主要是为了让大家了解配置项中的 i18n 的作用。我们再看 headers 中的 locales 设置，举个例子：
+
+```javascript
+module.exports = {
+  i18n: {
+    locales: ['en', 'fr', 'de'],
+    defaultLocale: 'en',
+  },
+ 
+  async headers() {
+    return [
+      {
+        // 自动处理所有的 locales
+        // 也就是 `/en/with-locale`、`/fr/with-locale`、`/de/with-locale`、`/with-locale` 都会匹配
+        source: '/with-locale', 
+        headers: [
+          {
+            key: 'x-hello',
+            value: 'world1',
+          },
+        ],
+      },
+      {
+        // 因为 locale 设置为 false，所以不会自动处理 locales
+        // 也就是只匹配 `/nl/with-locale-manual`
+        source: '/nl/with-locale-manual',
+        locale: false,
+        headers: [
+          {
+            key: 'x-hello',
+            value: 'world2',
+          },
+        ],
+      },
+      {
+        // 匹配 '/' 因为 `en` 是 defaultLocale
+        // 也就是只匹配 `/`、`/en`
+        source: '/en',
+        locale: false,
+        headers: [
+          {
+            key: 'x-hello',
+            value: 'world3',
+          },
+        ],
+      },
+      {
+        // 会转换为 /(en|fr|de)/(.*) 所以不会匹配顶层
+        // 也就是 `/` 和 `/fr` 都不会匹配到
+        // 如果要匹配到这两个，可以用 `/:path*`
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'x-hello',
+            value: 'world4',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+注意，虽然 i18n.locales 配置在 App Router 下不生效，但这也只是导致页面出现 404 错误而已，并不会影响处理标头，即便页面 404，你可以正常的查看标头。
+
+### 1.6. has 和 missing
+
+`has` 和 `missing` 是用来处理请求中的 header、cookie 和请求参数是否匹配某些字段，或者不匹配某些字段的时候，才应用 header。
+
+举个例子，比如请求 `/article?id=1&author=yayu`，`has` 可以要求请求中必须有 id 参数，或者 id 参数等于 xxx 的时候才返回某个标头。`missing` 可以要求请求中必须没有 id 参数，或者 id 参数不等于 xxx 的时候才返回某个标头。
+
+`has` 和 `missing` 对象有下面这些字段：
+
+*   `type`: `String`类型，值为 `header`、`cookie`、`host`、`query` 之一
+*   `key`: `String`类型，所选类型（也就是上面的四种值）中要匹配的 key
+*   `value`： `String` 或者 `undefined`，要检查的值。如果值为 `undefiend`，任何值都不会匹配。支持使用一个类似正则的字符串捕获值的特殊部分。比如 `first-(?<paramName>.*)`用于匹配 `first-second`，然后就可以用 `:paramName`获取 `second` 这个值
+
+听起来有些复杂，看个例子其实就懂了：
+
+```javascript
+// next.config.js
+module.exports = {
+  async headers() {
+    return [
+      // 如果 header 中 `x-add-header` 字段存在
+      // 那就返回 `x-another-header` 标头
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'header',
+            key: 'x-add-header',
+          },
+        ],
+        headers: [
+          {
+            key: 'x-another-header',
+            value: 'hello',
+          },
+        ],
+      },
+      // 如果 header 中 `x-no-header` 字段不存在
+      // 就返回 `x-another-header` 标头
+      {
+        source: '/:path*',
+        missing: [
+          {
+            type: 'header',
+            key: 'x-no-header',
+          },
+        ],
+        headers: [
+          {
+            key: 'x-another-header',
+            value: 'hello',
+          },
+        ],
+      },
+      // 如果 source、query、cookie 都匹配
+      // 就返回 `x-authorized` 标头
+      {
+        source: '/specific/:path*',
+        has: [
+          {
+            type: 'query',
+            key: 'page',
+            value: 'home',
+          },
+          {
+            type: 'cookie',
+            key: 'authorized',
+            value: 'true',
+          },
+        ],
+        headers: [
+          {
+            key: 'x-authorized',
+            value: 'hello',
+          },
+        ],
+      },
+      //如果 header 中 `x-authorized` 存在且等于 yes 或 true
+      // 就返回 `x-another-header` 标头
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'header',
+            key: 'x-authorized',
+            value: '(?<authorized>yes|true)',
+          },
+        ],
+        headers: [
+          {
+            key: 'x-another-header',
+            value: ':authorized',
+          },
+        ],
+      },
+      // 如果 host 是 `example.com`,
+      // 应用 header
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'example.com',
+          },
+        ],
+        headers: [
+          {
+            key: 'x-another-header',
+            value: 'hello',
+          },
+        ],
+      },
+    ]
+  },
+}
+```
+
+注意，has 和 missing 判断的都是请求头中的值。 type 的四种类型为 header、cookie、host、query，其中下图中的值都是 header：
+
+![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f286f2e743624f39b7f0ab7678bc7a10~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1548\&h=544\&s=121143\&e=png\&b=282828)
+
+cookie 指的是其中的 Cookie 标头，Next.js 已经自动做了解析，所以可以直接判断 Cookie 中的字段值：
+
+![image (1).png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1b0f0c3bde944941b01ece1cd01f43c0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1548\&h=544\&s=118810\&e=png\&b=282828)
+
+host 就是主机名 + 端口，query 表示参数。以 `'http://user:pass@host.com:8080/p/a/t/h?query=string#hash'`为例的话，**host** 的值为 `host.com:8080`。**query** 为 `query=string`。
+
+### 1.7. Cache-Control
+
+你不能在 `next.config.js` 中为页面或静态资源设置 `Cache-Control`标头，因为该标头会在生产中被覆盖，以确保有效缓存响应和静态资源。
+
+### 1.8. 选项
+
+#### X-DNS-Prefetch-Control
+
+[X-DNS-Prefetch-Control](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/X-DNS-Prefetch-Control)  头控制着浏览器的 DNS 预读取功能。DNS 预读取是一项使浏览器主动去执行域名解析的功能，其范围包括文档的所有链接，无论是图片的，CSS 的，还是 JavaScript 等其他用户能够点击的 URL。
+
+因为预读取会在后台执行，所以 DNS 很可能在链接对应的东西出现之前就已经解析完毕。这能够减少用户点击链接时的延迟。
+
+```json
+{
+  key: 'X-DNS-Prefetch-Control',
+  value: 'on'
+}
+```
+
+#### Strict-Transport-Security
+
+[Strict-Transport-Security](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Strict-Transport-Security)（通常简称为 HSTS）响应标头用来通知浏览器应该只通过 HTTPS 访问该站点，并且以后使用 HTTP 访问该站点的所有尝试都应自动重定向到 HTTPS。
+
+使用下面的配置，所有当前和未来的子域都将使用 `max-age` 为 2 年的 HTTPS：
+
+```javascript
+{
+  key: 'Strict-Transport-Security',
+  value: 'max-age=63072000; includeSubDomains; preload'
+}
+```
+
+#### X-Frame-Options
+
+[X-Frame-Options](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/X-Frame-Options) HTTP 响应头是用来给浏览器指示允许一个页面可否在 `<frame>`、`<iframe>`、`<embed>` 或者 `<object>` 中展现的标记。站点可以通过确保网站没有被嵌入到别人的站点里面，从而避免点击劫持 (en-US)攻击。
+
+此标头已经被 [frame-ancestors](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Content-Security-Policy/frame-ancestors) 替代，它在现代浏览器中有更好的支持。
+
+#### Permissions-Policy
+
+[Permissions-Policy](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Permissions-Policy)  响应标头提供了一种可以在本页面或包含的 iframe 上启用或禁止浏览器特性的机制，之前叫做 `Feature-Policy`。
+
+```json
+{
+  key: 'Permissions-Policy',
+  value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()'
+}
+```
+
+#### X-Content-Type-Options
+
+如果 `Content-Type` 标头没有被显示设置，[X-Content-Type-Options](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/X-Content-Type-Options) 会阻止浏览器尝试猜测内容类型。这可以防止允许用户上传和共享文件的网站受到 XSS 攻击。
+
+这个标头只有一个有效值是 `nosniff`。
+
+```json
+{
+  key: 'X-Content-Type-Options',
+  value: 'nosniff'
+}
+```
+
+#### Referrer-Policy
+
+[Referrer-Policy](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Referrer-Policy) 控制当从当前网页导航到另一个网页时携带的信息内容：
+
+```json
+{
+  key: 'Referrer-Policy',
+  value: 'origin-when-cross-origin'
+}
+```
+
+## 2. redirects
